@@ -1768,22 +1768,38 @@ ${panelTemplates.join('')}
             background: var(--aia-accent); color: #fff; border-color: var(--aia-accent);
         }
 
-        /* Segmented 单选（仿 ChatGPT 模型选择器风格） */
+        /* Segmented 单选（仿 ChatGPT 模型选择器风格，滑块平滑过渡） */
         .aia-segmented {
             display: inline-flex; background: var(--aia-soft);
             border-radius: 999px; padding: 3px;
+            position: relative;
         }
-        .aia-seg { display: inline-flex; cursor: pointer; user-select: none; position: relative; }
+        .aia-segmented::before {
+            content: ""; position: absolute;
+            top: 3px; bottom: 3px; left: 3px;
+            width: calc(50% - 3px);
+            background: var(--aia-bg);
+            border-radius: 999px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+        .aia-segmented:has(input[value="team"]:checked)::before {
+            transform: translateX(100%);
+        }
+        .aia-seg {
+            display: inline-flex; cursor: pointer; user-select: none;
+            position: relative; flex: 1; z-index: 1;
+        }
         .aia-seg input { position: absolute; opacity: 0; pointer-events: none; }
         .aia-seg > span {
+            flex: 1; text-align: center;
             padding: 7px 18px; border-radius: 999px;
             font-size: 13.5px; color: var(--aia-text-2);
-            transition: all 0.15s;
+            transition: color 0.18s ease;
         }
         .aia-seg input:checked + span {
-            background: var(--aia-bg); color: var(--aia-text);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            font-weight: 500;
+            color: var(--aia-text); font-weight: 500;
         }
 
         /* Checkbox row */
