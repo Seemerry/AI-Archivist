@@ -1852,11 +1852,13 @@ ${panelTemplates.join('')}
         .aia-conv-row .aia-conv-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--aia-text); }
         .aia-conv-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--aia-accent); cursor: pointer; flex-shrink: 0; }
         .aia-proj { margin: 2px 0; }
-        .aia-proj > summary { list-style: none; cursor: pointer; padding: 8px 12px; border-radius: 8px; color: var(--aia-text-2); font-weight: 500; font-size: 12.5px; user-select: none; }
+        .aia-proj > summary { list-style: none; cursor: pointer; padding: 8px 12px; border-radius: 8px; color: var(--aia-text-2); font-weight: 500; font-size: 12.5px; user-select: none; display: flex; align-items: center; }
         .aia-proj > summary::-webkit-details-marker { display: none; }
-        .aia-proj > summary::before { content: '▸'; display: inline-block; margin-right: 6px; color: var(--aia-text-3); transition: transform 0.1s; }
+        .aia-proj > summary::before { content: '▸'; display: inline-block; margin-right: 6px; color: var(--aia-text-3); transition: transform 0.1s; flex-shrink: 0; }
         .aia-proj[open] > summary::before { content: '▾'; }
         .aia-proj > summary:hover { background: #fff; }
+        .aia-proj > summary .proj-check { width: 15px; height: 15px; accent-color: var(--aia-accent); cursor: pointer; flex-shrink: 0; margin-right: 8px; }
+        .aia-proj > summary .aia-proj-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .aia-proj .aia-conv-row { padding-left: 28px; }
 
         /* Footer */
@@ -1983,7 +1985,18 @@ ${panelTemplates.join('')}
                 wrap.className = 'aia-proj';
                 wrap.open = true;
                 const summary = document.createElement('summary');
-                summary.textContent = `${sanitizeFilename(detail.title)} · ${detail.list.length} 个`;
+                const projCheck = document.createElement('input');
+                projCheck.type = 'checkbox';
+                projCheck.className = 'proj-check';
+                projCheck.setAttribute('data-project', pid);
+                projCheck.checked = true;
+                // 点击项目级勾选框时不要连带展开/收起文件夹
+                projCheck.addEventListener('click', e => e.stopPropagation());
+                const projTitle = document.createElement('span');
+                projTitle.className = 'aia-proj-title';
+                projTitle.textContent = `${sanitizeFilename(detail.title)} · ${detail.list.length} 个`;
+                summary.appendChild(projCheck);
+                summary.appendChild(projTitle);
                 wrap.appendChild(summary);
                 detail.list.forEach(item => {
                     const row = document.createElement('label');
@@ -2007,7 +2020,7 @@ ${panelTemplates.join('')}
                 frag.appendChild(row);
             });
             convListEl.appendChild(frag);
-            convSelectAll.checked = true;
+            syncSelectionStates();
         };
 
         const determineWorkspace = () => {
@@ -2053,12 +2066,32 @@ ${panelTemplates.join('')}
             if (radioTeam.checked) teamArea.removeAttribute('hidden'); else teamArea.setAttribute('hidden', '');
         };
 
-        convSelectAll.addEventListener('change', () => {
-            convListEl.querySelectorAll('.conv-check').forEach(cb => { cb.checked = convSelectAll.checked; });
-        });
-        convListEl.addEventListener('change', () => {
+        // 依据各对话勾选框的当前状态，回写项目级勾选框（全选/半选/全不选）与顶部全选框
+        const syncSelectionStates = () => {
+            convListEl.querySelectorAll('.proj-check').forEach(pc => {
+                const pid = pc.getAttribute('data-project');
+                const kids = Array.from(convListEl.querySelectorAll('.conv-check')).filter(cb => cb.getAttribute('data-project') === pid);
+                const checkedCount = kids.filter(cb => cb.checked).length;
+                pc.checked = kids.length > 0 && checkedCount === kids.length;
+                pc.indeterminate = checkedCount > 0 && checkedCount < kids.length;
+            });
             const checks = Array.from(convListEl.querySelectorAll('.conv-check'));
             convSelectAll.checked = checks.length > 0 && checks.every(cb => cb.checked);
+        };
+        convSelectAll.addEventListener('change', () => {
+            convListEl.querySelectorAll('.conv-check').forEach(cb => { cb.checked = convSelectAll.checked; });
+            syncSelectionStates();
+        });
+        convListEl.addEventListener('change', (e) => {
+            // 点击项目级勾选框：整组对话一起勾上/取消
+            if (e.target && e.target.classList.contains('proj-check')) {
+                const pid = e.target.getAttribute('data-project');
+                const checked = e.target.checked;
+                Array.from(convListEl.querySelectorAll('.conv-check'))
+                    .filter(cb => cb.getAttribute('data-project') === pid)
+                    .forEach(cb => { cb.checked = checked; });
+            }
+            syncSelectionStates();
         });
         convRefresh.onclick = () => { loadConversationList(true); };
         const ids = detectAllWorkspaceIds();
