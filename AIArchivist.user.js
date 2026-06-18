@@ -1495,8 +1495,8 @@ ${panelTemplates.join('')}
     }
 
     // --- API 调用函数 API helpers ---
+    // snorlax/sidebar 在个人账号同样可用（个人也支持 Projects），workspaceId 为 null 时按个人空间返回。
     async function getProjects(workspaceId) {
-        if (!workspaceId) return [];
         const r = await fetchWithRetry(`/backend-api/gizmos/snorlax/sidebar`, { headers: buildHeaders(workspaceId) });
         if (!r.ok) { console.warn(`获取项目(Gizmo)列表失败 (${r.status})`); return []; }
         const data = await r.json();
@@ -1554,6 +1554,27 @@ ${panelTemplates.join('')}
             });
         };
 
+        // 项目内对话（个人 / 团队空间都支持 Projects）。
+        // 先拉项目再拉根目录：若同一对话两边都出现，去重时项目版本先入，能正确归到项目子文件夹。
+        // 单个项目失败降级为警告，避免某个异常项目拖垮整个列表。
+        const projects = await getProjects(workspaceId);
+        for (const project of projects) {
+            try {
+                let cursor = '0';
+                do {
+                    progressCb(`加载项目 ${project.title}…`);
+                    const r = await fetchWithRetry(`/backend-api/gizmos/${project.id}/conversations?cursor=${cursor}`, { headers });
+                    if (!r.ok) throw new Error(`列举项目 ${project.title} 对话列表失败 (${r.status})`);
+                    const j = await r.json();
+                    j.items?.forEach(it => pushItem(it, { id: project.id, title: project.title }));
+                    cursor = j.cursor;
+                    await sleep(jitter());
+                } while (cursor);
+            } catch (e) {
+                try { console.warn(`跳过项目 ${project.title}（${project.id}）：`, e); } catch (_) {}
+            }
+        }
+
         // 根目录对话
         progressCb('加载项目外对话列表…');
         for (const is_archived of [false, true]) {
@@ -1570,23 +1591,6 @@ ${panelTemplates.join('')}
                 } else { has_more = false; }
                 await sleep(jitter());
             } while (has_more);
-        }
-
-        // 项目内对话（仅团队空间有）
-        if (workspaceId) {
-            const projects = await getProjects(workspaceId);
-            for (const project of projects) {
-                let cursor = '0';
-                do {
-                    progressCb(`加载项目 ${project.title}…`);
-                    const r = await fetchWithRetry(`/backend-api/gizmos/${project.id}/conversations?cursor=${cursor}`, { headers });
-                    if (!r.ok) throw new Error(`列举项目 ${project.title} 对话列表失败 (${r.status})`);
-                    const j = await r.json();
-                    j.items?.forEach(it => pushItem(it, { id: project.id, title: project.title }));
-                    cursor = j.cursor;
-                    await sleep(jitter());
-                } while (cursor);
-            }
         }
 
         progressCb(`已加载 ${all.length} 个对话，可勾选导出。`);
